@@ -34,8 +34,8 @@
         position: fixed;
         top: 15px;
         left: 15px;
-        width: 260px;
-        height: 220px;
+        width: 280px;
+        height: 260px;
         overflow-y: auto;
         background: rgba(0,0,0,0.55);
         padding: 12px;
@@ -62,11 +62,11 @@
         background: rgba(255,255,255,0.08);
         padding: 6px 8px;
         border-radius: 10px;
-        animation: fadeIn 0.3s ease;
+        animation: fadeIn 0.25s ease;
     }
 
     @keyframes fadeIn {
-        from {opacity: 0; transform: translateY(5px);}
+        from {opacity: 0; transform: translateY(6px);}
         to {opacity: 1; transform: translateY(0);}
     }
 
@@ -91,6 +91,7 @@
         top: -60px;
         font-size: 55px;
         user-select: none;
+        filter: drop-shadow(0 8px 10px rgba(0,0,0,0.4));
     }
 
     #overlay {
@@ -177,6 +178,32 @@
         font-size: 14px;
     }
 
+    .shake {
+        animation: shake 0.25s;
+    }
+
+    @keyframes shake {
+        0% { transform: translate(0,0); }
+        25% { transform: translate(6px, -4px); }
+        50% { transform: translate(-6px, 4px); }
+        75% { transform: translate(4px, 6px); }
+        100% { transform: translate(0,0); }
+    }
+
+    #bigText {
+        position: fixed;
+        top: 45%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 55px;
+        font-weight: bold;
+        text-shadow: 0 0 20px rgba(255,255,255,0.25);
+        opacity: 0;
+        transition: 0.15s;
+        z-index: 1500;
+        pointer-events: none;
+    }
+
 </style>
 </head>
 
@@ -185,11 +212,11 @@
 <div id="startScreen">
     <div class="startCard">
         <h1>🍺 Bachūrų Kritimo Simulatorius</h1>
-        <p>Įvesk vardą, kad prasidėtų gėrimo misija 😈</p>
+        <p>Įvesk vardą ir pradėk gėrimo misiją 😈</p>
         <input id="nameInput" placeholder="Pvz: Mantas">
         <br>
         <button id="startBtn">PRADĖT 🍻</button>
-        <p>⚠️ Jei surinksi mažiau nei 15 - būsi gaidys.</p>
+        <p>⚠️ Jei surinksi mažiau nei 15 - būsi GAIDYS 🐓</p>
     </div>
 </div>
 
@@ -203,6 +230,8 @@
     <h3>📜 Istorija</h3>
     <div id="history"></div>
 </div>
+
+<div id="bigText"></div>
 
 <div id="gameArea">
     <div id="player">🧺</div>
@@ -220,6 +249,7 @@ const player = document.getElementById("player");
 const scoreEl = document.getElementById("score");
 const timeEl = document.getElementById("time");
 const historyEl = document.getElementById("history");
+const bigText = document.getElementById("bigText");
 
 const overlay = document.getElementById("overlay");
 const resultTitle = document.getElementById("resultTitle");
@@ -234,20 +264,119 @@ let playerName = "Bachūras";
 let score = 0;
 let timeLeft = 25;
 let gameRunning = false;
-
 let playerX = window.innerWidth / 2;
 
-const items = [
-    { emoji: "🍺", points: 1, name: "Alų", chance: 35 },
-    { emoji: "🍕", points: 2, name: "Picą", chance: 18 },
-    { emoji: "🍟", points: 2, name: "Bulvytes", chance: 18 },
-    { emoji: "🏀", points: 3, name: "Kašio kamuolį", chance: 12 },
-    { emoji: "🥃", points: 5, name: "Stiprų gėrimą", chance: 10 },
-    { emoji: "💩", points: -3, name: "Šūdą", chance: 5 },
-    { emoji: "🐓", points: -999, name: "Gaidį", chance: 2 }
+const catchPhrasesGood = [
+    "NICEEE 😎",
+    "OPA OPA 🍻",
+    "KAS ČIA PER SKILLAS 🔥",
+    "LEGENDINIS PAGAVIMAS 👑",
+    "ŽVĖRIS MODE 🐺",
+    "TIKRAS BACHŪRAS 💪",
+    "ČIA NE ŽAIDIMAS, ČIA MENAS 🎨",
+    "TU KAIP MAGNETAS 🍺",
+    "BROLIS GAUDO VISKĄ 😭"
 ];
 
-// helper random weighted
+const catchPhrasesBad = [
+    "BLEEE 🤢",
+    "FUJ ŠŪDAS 💩",
+    "KAS TAU DAROSI??",
+    "NEIMK TO 😭",
+    "ČIA JAU PER ŽEMA...",
+    "GĖDA 😐"
+];
+
+const endTextsGood = [
+    "Tu esi oficialus alaus dievas 🍻🔥",
+    "Tavo kepenys pasiruošusios karui 💀",
+    "Šitas rezultatas kelia pagarbą net baro savininkui 😭",
+    "Tu būtum MVP kiekvienam baliuj 😎",
+    "Jeigu čia buvo testas – tu jį išlaikei su pagyrimu 👑",
+    "Čia jau nebe žmogus, čia alaus magnetas 🍺🧲"
+];
+
+const endTextsMid = [
+    "Normaliai, bet dar trūksta iki legendos 😎",
+    "Tu kaip pusiau bachūras, pusiau studentas 😭",
+    "Dar vienas vakaras ir būtum topas 🍻",
+    "Ne gaidys, bet ir ne karalius 👀",
+    "Rezultatas kaip po dviejų alaus: neblogai, bet miglota."
+];
+
+const endTextsBad = [
+    "Tu oficialiai esi višta... 🐔",
+    "Čia jau tragedija, brolau 😭",
+    "Tu pagavai mažiau nei mano močiutė pagautų 🍺",
+    "Gėda prieš visą rajoną 💀",
+    "Net šuo pagautų daugiau."
+];
+
+// audio beeps (no mp3 needed)
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playSound(type) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    if (type === "good") {
+        osc.frequency.value = 700;
+        gain.gain.value = 0.08;
+        osc.type = "triangle";
+    }
+
+    if (type === "bad") {
+        osc.frequency.value = 200;
+        gain.gain.value = 0.12;
+        osc.type = "sawtooth";
+    }
+
+    if (type === "big") {
+        osc.frequency.value = 950;
+        gain.gain.value = 0.15;
+        osc.type = "square";
+    }
+
+    if (type === "gaidys") {
+        osc.frequency.value = 120;
+        gain.gain.value = 0.2;
+        osc.type = "square";
+    }
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.12);
+}
+
+function showBigText(text) {
+    bigText.textContent = text;
+    bigText.style.opacity = "1";
+    setTimeout(() => bigText.style.opacity = "0", 500);
+}
+
+function logEvent(text) {
+    const div = document.createElement("div");
+    div.classList.add("log");
+    div.innerHTML = text;
+    historyEl.prepend(div);
+
+    if (historyEl.children.length > 10) {
+        historyEl.removeChild(historyEl.lastChild);
+    }
+}
+
+const items = [
+    { emoji: "🍺", points: 1, name: "Alų", chance: 35, sound: "good" },
+    { emoji: "🍕", points: 2, name: "Picą", chance: 16, sound: "good" },
+    { emoji: "🍟", points: 2, name: "Bulvytes", chance: 16, sound: "good" },
+    { emoji: "🏀", points: 3, name: "Kašio kamuolį", chance: 12, sound: "good" },
+    { emoji: "🥃", points: 5, name: "Stiprų gėrimą", chance: 10, sound: "big" },
+    { emoji: "💩", points: -3, name: "Šūdą", chance: 7, sound: "bad" },
+    { emoji: "🐓", points: -10, name: "Gaidį", chance: 4, sound: "gaidys" }
+];
+
 function getRandomItem() {
     let totalChance = items.reduce((sum, i) => sum + i.chance, 0);
     let rand = Math.random() * totalChance;
@@ -259,18 +388,7 @@ function getRandomItem() {
     return items[0];
 }
 
-function logEvent(text) {
-    const div = document.createElement("div");
-    div.classList.add("log");
-    div.innerHTML = text;
-    historyEl.prepend(div);
-
-    if (historyEl.children.length > 8) {
-        historyEl.removeChild(historyEl.lastChild);
-    }
-}
-
-startBtn.addEventListener("click", () => {
+startBtn.addEventListener("click", async () => {
     playerName = nameInput.value.trim();
     if (playerName === "") playerName = "Anonimas";
 
@@ -278,23 +396,25 @@ startBtn.addEventListener("click", () => {
     startScreen.style.display = "none";
     gameRunning = true;
 
+    // needed so browser allows audio
+    await audioCtx.resume();
+
     logEvent(`👤 <b>${playerName}</b> prisijungė prie gėrimo misijos.`);
+    showBigText("PRADĖTA 🍻");
+
     startGame();
 });
 
-// move with mouse
 document.addEventListener("mousemove", (e) => {
     playerX = e.clientX;
     player.style.left = playerX + "px";
 });
 
-// mobile touch
 document.addEventListener("touchmove", (e) => {
     playerX = e.touches[0].clientX;
     player.style.left = playerX + "px";
 });
 
-// spawn falling item
 function spawnItem() {
     if (!gameRunning) return;
 
@@ -308,7 +428,7 @@ function spawnItem() {
 
     gameArea.appendChild(item);
 
-    let fallSpeed = 4 + Math.random() * 5;
+    let fallSpeed = 4 + Math.random() * 6;
 
     const fallInterval = setInterval(() => {
         if (!gameRunning) {
@@ -324,25 +444,33 @@ function spawnItem() {
         const itemRect = item.getBoundingClientRect();
         const playerRect = player.getBoundingClientRect();
 
-        // collision
         if (
             itemRect.bottom >= playerRect.top &&
             itemRect.left < playerRect.right &&
             itemRect.right > playerRect.left
         ) {
-            if (itemData.points === -999) {
-                score -= 10;
-                scoreEl.textContent = score;
-                logEvent(`🐓 <b>${playerName}</b> pagavo GAIDĮ... (minus 10) 💀`);
-            } else {
-                score += itemData.points;
-                scoreEl.textContent = score;
+            score += itemData.points;
+            scoreEl.textContent = score;
 
-                if (itemData.points > 0) {
-                    logEvent(`${itemData.emoji} <b>${playerName}</b> pagavo ${itemData.name} (+${itemData.points})`);
-                } else {
-                    logEvent(`${itemData.emoji} <b>${playerName}</b> pagavo ${itemData.name} (${itemData.points}) 🤢`);
-                }
+            playSound(itemData.sound);
+
+            if (itemData.points > 0) {
+                const phrase = catchPhrasesGood[Math.floor(Math.random() * catchPhrasesGood.length)];
+                showBigText(phrase);
+                logEvent(`${itemData.emoji} <b>${playerName}</b> pagavo ${itemData.name} (+${itemData.points})`);
+            } else {
+                const phrase = catchPhrasesBad[Math.floor(Math.random() * catchPhrasesBad.length)];
+                showBigText(phrase);
+                logEvent(`${itemData.emoji} <b>${playerName}</b> pagavo ${itemData.name} (${itemData.points})`);
+            }
+
+            if (itemData.emoji === "💩") {
+                document.body.classList.add("shake");
+                setTimeout(() => document.body.classList.remove("shake"), 250);
+            }
+
+            if (itemData.emoji === "🐓") {
+                showBigText("GAIDYS MODE 🐓");
             }
 
             item.remove();
@@ -357,7 +485,6 @@ function spawnItem() {
     }, 20);
 }
 
-// timer
 function startGame() {
     const spawnInterval = setInterval(() => {
         if (!gameRunning) {
@@ -365,7 +492,7 @@ function startGame() {
             return;
         }
         spawnItem();
-    }, 550);
+    }, 520);
 
     const timerInterval = setInterval(() => {
         if (!gameRunning) return;
@@ -381,29 +508,33 @@ function startGame() {
     }, 1000);
 }
 
-// end game screen
+function randomFrom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
 function endGame() {
     overlay.style.display = "flex";
 
     if (score < 15) {
-        resultTitle.innerHTML = "🐓 GAIDYS MODE 🐓";
+        resultTitle.innerHTML = "🐓 GAIDYS DETECTED 🐓";
         resultText.innerHTML = `
             <b>${playerName}</b>, tu surinkai tik <b>${score}</b> taškų.<br><br>
-            Čia jau ne bachūras, čia višta...<br>
-            Eik treniruotis refleksų, gaideli 😭
+            ${randomFrom(endTextsBad)}<br><br>
+            Šiandien tu oficialiai esi rajono GAIDYS 😭
         `;
     } else if (score < 30) {
-        resultTitle.innerHTML = "🍺 Bachūras legit 🍺";
+        resultTitle.innerHTML = "🍺 Bachūras, bet atsargiai 🍺";
         resultText.innerHTML = `
             <b>${playerName}</b>, surinkai <b>${score}</b> taškų.<br><br>
-            Ne blogai, bet dar trūksta iki legendos 😎
+            ${randomFrom(endTextsMid)}<br><br>
+            Dar vienas balius ir būsi topas 😎
         `;
     } else {
         resultTitle.innerHTML = "👑 ALKO IMPERATORIUS 👑";
         resultText.innerHTML = `
             <b>${playerName}</b>, surinkai <b>${score}</b> taškų.<br><br>
-            Tu esi oficialus alaus dievas 🍻🔥<br>
-            Kaunas tavim didžiuojasi.
+            ${randomFrom(endTextsGood)}<br><br>
+            Visa Lietuva tavim didžiuojasi 🇱🇹🍻
         `;
     }
 
