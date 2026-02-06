@@ -3,16 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Alaus Kritimo Challenge 🍺</title>
+<title>Bachūrų Kritimo Simulatorius 🍺💩</title>
 
 <style>
     body {
         margin: 0;
         overflow: hidden;
         font-family: Arial, sans-serif;
-        background: linear-gradient(135deg, #1e1e1e, #3a2f2f);
+        background: linear-gradient(135deg, #111, #2a1f1f);
         color: white;
-        text-align: center;
     }
 
     #hud {
@@ -20,12 +19,55 @@
         top: 15px;
         left: 50%;
         transform: translateX(-50%);
-        font-size: 20px;
-        background: rgba(0,0,0,0.5);
-        padding: 12px 20px;
+        font-size: 18px;
+        background: rgba(0,0,0,0.6);
+        padding: 12px 18px;
         border-radius: 15px;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
         z-index: 999;
+        display: flex;
+        gap: 20px;
+        align-items: center;
+    }
+
+    #historyBox {
+        position: fixed;
+        top: 15px;
+        left: 15px;
+        width: 260px;
+        height: 220px;
+        overflow-y: auto;
+        background: rgba(0,0,0,0.55);
+        padding: 12px;
+        border-radius: 15px;
+        font-size: 14px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+        z-index: 999;
+    }
+
+    #historyBox h3 {
+        margin: 0 0 8px 0;
+        font-size: 15px;
+        text-align: center;
+        opacity: 0.9;
+    }
+
+    #history {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .log {
+        background: rgba(255,255,255,0.08);
+        padding: 6px 8px;
+        border-radius: 10px;
+        animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+        from {opacity: 0; transform: translateY(5px);}
+        to {opacity: 1; transform: translateY(0);}
     }
 
     #gameArea {
@@ -36,15 +78,15 @@
 
     #player {
         position: absolute;
-        bottom: 30px;
+        bottom: 25px;
         left: 50%;
         transform: translateX(-50%);
-        font-size: 70px;
-        transition: 0.05s;
+        font-size: 75px;
         user-select: none;
+        transition: 0.05s;
     }
 
-    .beer {
+    .item {
         position: absolute;
         top: -60px;
         font-size: 55px;
@@ -55,22 +97,24 @@
         display: none;
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.85);
+        background: rgba(0,0,0,0.88);
         justify-content: center;
         align-items: center;
         flex-direction: column;
         z-index: 1000;
         padding: 20px;
+        text-align: center;
     }
 
     #overlay h1 {
-        font-size: 50px;
+        font-size: 55px;
         margin-bottom: 10px;
     }
 
     #overlay p {
         font-size: 22px;
-        max-width: 600px;
+        max-width: 650px;
+        line-height: 1.4;
     }
 
     button {
@@ -90,13 +134,74 @@
         transform: scale(1.05);
         background: #ffd633;
     }
+
+    #startScreen {
+        position: fixed;
+        inset: 0;
+        background: linear-gradient(135deg, #111, #3b1c1c);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 2000;
+    }
+
+    .startCard {
+        background: rgba(255,255,255,0.08);
+        padding: 35px;
+        border-radius: 25px;
+        text-align: center;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+        width: 90%;
+        max-width: 420px;
+    }
+
+    .startCard h1 {
+        margin: 0 0 15px 0;
+        font-size: 30px;
+    }
+
+    .startCard input {
+        width: 90%;
+        padding: 12px;
+        border-radius: 12px;
+        border: none;
+        font-size: 18px;
+        margin-top: 10px;
+        outline: none;
+        text-align: center;
+    }
+
+    .startCard p {
+        opacity: 0.8;
+        margin-top: 10px;
+        font-size: 14px;
+    }
+
 </style>
 </head>
 
 <body>
 
+<div id="startScreen">
+    <div class="startCard">
+        <h1>🍺 Bachūrų Kritimo Simulatorius</h1>
+        <p>Įvesk vardą, kad prasidėtų gėrimo misija 😈</p>
+        <input id="nameInput" placeholder="Pvz: Mantas">
+        <br>
+        <button id="startBtn">PRADĖT 🍻</button>
+        <p>⚠️ Jei surinksi mažiau nei 15 - būsi gaidys.</p>
+    </div>
+</div>
+
 <div id="hud">
-    🍺 Surinkta: <span id="score">0</span> | ⏳ Laikas: <span id="time">20</span>s
+    👤 <span id="playerName">---</span>
+    🍀 Taškai: <span id="score">0</span>
+    ⏳ Laikas: <span id="time">25</span>s
+</div>
+
+<div id="historyBox">
+    <h3>📜 Istorija</h3>
+    <div id="history"></div>
 </div>
 
 <div id="gameArea">
@@ -114,127 +219,195 @@ const gameArea = document.getElementById("gameArea");
 const player = document.getElementById("player");
 const scoreEl = document.getElementById("score");
 const timeEl = document.getElementById("time");
+const historyEl = document.getElementById("history");
 
 const overlay = document.getElementById("overlay");
 const resultTitle = document.getElementById("resultTitle");
 const resultText = document.getElementById("resultText");
 
+const startScreen = document.getElementById("startScreen");
+const startBtn = document.getElementById("startBtn");
+const nameInput = document.getElementById("nameInput");
+const playerNameEl = document.getElementById("playerName");
+
+let playerName = "Bachūras";
 let score = 0;
-let timeLeft = 20;
-let gameRunning = true;
+let timeLeft = 25;
+let gameRunning = false;
 
 let playerX = window.innerWidth / 2;
-const playerWidth = 80;
 
-// Move player with mouse
+const items = [
+    { emoji: "🍺", points: 1, name: "Alų", chance: 35 },
+    { emoji: "🍕", points: 2, name: "Picą", chance: 18 },
+    { emoji: "🍟", points: 2, name: "Bulvytes", chance: 18 },
+    { emoji: "🏀", points: 3, name: "Kašio kamuolį", chance: 12 },
+    { emoji: "🥃", points: 5, name: "Stiprų gėrimą", chance: 10 },
+    { emoji: "💩", points: -3, name: "Šūdą", chance: 5 },
+    { emoji: "🐓", points: -999, name: "Gaidį", chance: 2 }
+];
+
+// helper random weighted
+function getRandomItem() {
+    let totalChance = items.reduce((sum, i) => sum + i.chance, 0);
+    let rand = Math.random() * totalChance;
+
+    for (let item of items) {
+        rand -= item.chance;
+        if (rand <= 0) return item;
+    }
+    return items[0];
+}
+
+function logEvent(text) {
+    const div = document.createElement("div");
+    div.classList.add("log");
+    div.innerHTML = text;
+    historyEl.prepend(div);
+
+    if (historyEl.children.length > 8) {
+        historyEl.removeChild(historyEl.lastChild);
+    }
+}
+
+startBtn.addEventListener("click", () => {
+    playerName = nameInput.value.trim();
+    if (playerName === "") playerName = "Anonimas";
+
+    playerNameEl.textContent = playerName;
+    startScreen.style.display = "none";
+    gameRunning = true;
+
+    logEvent(`👤 <b>${playerName}</b> prisijungė prie gėrimo misijos.`);
+    startGame();
+});
+
+// move with mouse
 document.addEventListener("mousemove", (e) => {
     playerX = e.clientX;
     player.style.left = playerX + "px";
 });
 
-// Mobile touch support
+// mobile touch
 document.addEventListener("touchmove", (e) => {
     playerX = e.touches[0].clientX;
     player.style.left = playerX + "px";
 });
 
-// Spawn beers
-function spawnBeer() {
+// spawn falling item
+function spawnItem() {
     if (!gameRunning) return;
 
-    const beer = document.createElement("div");
-    beer.classList.add("beer");
-    beer.textContent = "🍺";
+    const itemData = getRandomItem();
+    const item = document.createElement("div");
+    item.classList.add("item");
+    item.textContent = itemData.emoji;
 
-    beer.style.left = Math.random() * (window.innerWidth - 50) + "px";
-    beer.style.top = "-60px";
+    item.style.left = Math.random() * (window.innerWidth - 50) + "px";
+    item.style.top = "-60px";
 
-    gameArea.appendChild(beer);
+    gameArea.appendChild(item);
 
-    let fallSpeed = 4 + Math.random() * 4;
+    let fallSpeed = 4 + Math.random() * 5;
 
     const fallInterval = setInterval(() => {
         if (!gameRunning) {
             clearInterval(fallInterval);
-            beer.remove();
+            item.remove();
             return;
         }
 
-        let beerY = parseFloat(beer.style.top);
-        beerY += fallSpeed;
-        beer.style.top = beerY + "px";
+        let y = parseFloat(item.style.top);
+        y += fallSpeed;
+        item.style.top = y + "px";
 
-        // Collision detection
-        const beerRect = beer.getBoundingClientRect();
+        const itemRect = item.getBoundingClientRect();
         const playerRect = player.getBoundingClientRect();
 
+        // collision
         if (
-            beerRect.bottom >= playerRect.top &&
-            beerRect.left < playerRect.right &&
-            beerRect.right > playerRect.left
+            itemRect.bottom >= playerRect.top &&
+            itemRect.left < playerRect.right &&
+            itemRect.right > playerRect.left
         ) {
-            score++;
-            scoreEl.textContent = score;
-            beer.remove();
+            if (itemData.points === -999) {
+                score -= 10;
+                scoreEl.textContent = score;
+                logEvent(`🐓 <b>${playerName}</b> pagavo GAIDĮ... (minus 10) 💀`);
+            } else {
+                score += itemData.points;
+                scoreEl.textContent = score;
+
+                if (itemData.points > 0) {
+                    logEvent(`${itemData.emoji} <b>${playerName}</b> pagavo ${itemData.name} (+${itemData.points})`);
+                } else {
+                    logEvent(`${itemData.emoji} <b>${playerName}</b> pagavo ${itemData.name} (${itemData.points}) 🤢`);
+                }
+            }
+
+            item.remove();
             clearInterval(fallInterval);
         }
 
-        // Remove if missed
-        if (beerY > window.innerHeight) {
-            beer.remove();
+        if (y > window.innerHeight) {
+            item.remove();
             clearInterval(fallInterval);
         }
 
     }, 20);
 }
 
-// Timer countdown
-const timerInterval = setInterval(() => {
-    if (!gameRunning) return;
+// timer
+function startGame() {
+    const spawnInterval = setInterval(() => {
+        if (!gameRunning) {
+            clearInterval(spawnInterval);
+            return;
+        }
+        spawnItem();
+    }, 550);
 
-    timeLeft--;
-    timeEl.textContent = timeLeft;
+    const timerInterval = setInterval(() => {
+        if (!gameRunning) return;
 
-    if (timeLeft <= 0) {
-        gameRunning = false;
-        clearInterval(timerInterval);
-        endGame();
-    }
-}, 1000);
+        timeLeft--;
+        timeEl.textContent = timeLeft;
 
-// Spawn loop
-const spawnInterval = setInterval(() => {
-    if (!gameRunning) {
-        clearInterval(spawnInterval);
-        return;
-    }
-    spawnBeer();
-}, 600);
+        if (timeLeft <= 0) {
+            gameRunning = false;
+            clearInterval(timerInterval);
+            endGame();
+        }
+    }, 1000);
+}
 
-// End game logic
+// end game screen
 function endGame() {
     overlay.style.display = "flex";
 
-    if (score < 10) {
-        resultTitle.innerHTML = "🐓 GAIDYS DETECTED 🐓";
+    if (score < 15) {
+        resultTitle.innerHTML = "🐓 GAIDYS MODE 🐓";
         resultText.innerHTML = `
-            Tu surinkai tik <b>${score}</b> alaus.<br><br>
-            Rimtai? 😂<br>
-            Eik pasportuot refleksus, gaideli 😈
+            <b>${playerName}</b>, tu surinkai tik <b>${score}</b> taškų.<br><br>
+            Čia jau ne bachūras, čia višta...<br>
+            Eik treniruotis refleksų, gaideli 😭
         `;
-    } else if (score < 20) {
-        resultTitle.innerHTML = "🍺 Normalus vyras 🍺";
+    } else if (score < 30) {
+        resultTitle.innerHTML = "🍺 Bachūras legit 🍺";
         resultText.innerHTML = `
-            Tu surinkai <b>${score}</b> alaus.<br><br>
-            Dar trūksta iki legendos, bet jau ne gaidys 😎
+            <b>${playerName}</b>, surinkai <b>${score}</b> taškų.<br><br>
+            Ne blogai, bet dar trūksta iki legendos 😎
         `;
     } else {
-        resultTitle.innerHTML = "👑 ALUS KARALIUS 👑";
+        resultTitle.innerHTML = "👑 ALKO IMPERATORIUS 👑";
         resultText.innerHTML = `
-            Tu surinkai <b>${score}</b> alaus.<br><br>
-            Sveikinu, tu oficialiai gali gert be sąžinės graužaties 🍻🔥
+            <b>${playerName}</b>, surinkai <b>${score}</b> taškų.<br><br>
+            Tu esi oficialus alaus dievas 🍻🔥<br>
+            Kaunas tavim didžiuojasi.
         `;
     }
+
+    logEvent(`🏁 Žaidimas baigėsi. <b>${playerName}</b> surinko <b>${score}</b> taškų.`);
 }
 </script>
 
