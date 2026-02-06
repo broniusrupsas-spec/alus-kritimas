@@ -103,6 +103,7 @@
         font-size: 75px;
         user-select: none;
         transition: 0.05s;
+        filter: drop-shadow(0 10px 20px rgba(0,0,0,0.4));
     }
 
     .item {
@@ -111,6 +112,7 @@
         font-size: 55px;
         user-select: none;
         filter: drop-shadow(0 8px 10px rgba(0,0,0,0.4));
+        white-space: nowrap;
     }
 
     #overlay {
@@ -209,6 +211,21 @@
         transition: 0.15s;
         z-index: 1500;
         pointer-events: none;
+        text-align: center;
+    }
+
+    #eventBox {
+        position: fixed;
+        bottom: 15px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 18px;
+        background: rgba(255,255,255,0.08);
+        padding: 10px 18px;
+        border-radius: 15px;
+        z-index: 999;
+        opacity: 0;
+        transition: 0.2s;
     }
 </style>
 </head>
@@ -243,6 +260,7 @@
 </div>
 
 <div id="bigText"></div>
+<div id="eventBox"></div>
 
 <div id="gameArea">
     <div id="player">🧺</div>
@@ -254,7 +272,6 @@
     <button onclick="location.reload()">Bandyt dar kartą 😈</button>
 </div>
 
-<!-- FIREBASE -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -275,7 +292,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// UI elements
+// UI
 const gameArea = document.getElementById("gameArea");
 const player = document.getElementById("player");
 const scoreEl = document.getElementById("score");
@@ -283,6 +300,7 @@ const timeEl = document.getElementById("time");
 const historyEl = document.getElementById("history");
 const leaderboardEl = document.getElementById("leaderboard");
 const bigText = document.getElementById("bigText");
+const eventBox = document.getElementById("eventBox");
 
 const overlay = document.getElementById("overlay");
 const resultTitle = document.getElementById("resultTitle");
@@ -300,106 +318,120 @@ let timeLeft = 25;
 let gameRunning = false;
 let playerX = window.innerWidth / 2;
 
-// Random phrases
+let freezeMovement = false;
+let maximosAkcija = false;
+let zalgirisRun = false;
+
+// ====== PHRASES ======
 const catchPhrasesGood = [
-    "NICEEE 😎",
     "OPA OPA 🍻",
-    "ŽVĖRIS MODE 🐺",
-    "PAGAVAI KAIP DIEVAS 👑",
-    "SKILL ISSUE? NE, SKILL KING 😭",
-    "ČIA NE ŽAIDIMAS, ČIA GYVENIMAS 🔥",
-    "KĄ TU DARAI?? LEGENDINIS 😳",
-    "ALUS EINA PAS TAVE KAIP TAXI 🚖🍺",
-    "NEŽMONIŠKAS REFLEKSAS ⚡"
+    "NICEEE 😎",
+    "BACHŪRAS GAUDO 🔥",
+    "SKILL KING 👑",
+    "TU KAIP MAGNETAS 🧲",
+    "ČIA NE ŽAIDIMAS, ČIA TALENTAS 😭",
+    "TIKRAS REFLEKSAS ⚡",
+    "NEĮMANOMA... BET TU PADAREI 😳"
 ];
 
 const catchPhrasesBad = [
     "BLEEE 🤢",
-    "FUJ ŠŪDAS 💩",
-    "KAS TAU DAROSI??",
+    "FUJ 💩",
     "NEIMK TO 😭",
-    "ČIA JAU PER ŽEMA...",
-    "GĖDA 😐",
-    "MAMA MATYTŲ - IŠSIŽADĖTŲ 😭"
+    "KĄ TU DARAI??",
+    "ČIA JAU GAIDŽIO LYGIO...",
+    "NU TU IR DUCHAS 🤡"
 ];
 
 const endTextsGood = [
     "Tu esi oficialus alaus dievas 🍻🔥",
-    "Tavo kepenys pasiruošusios karui 💀",
     "Tave turėtų įrašyt į Lietuvos rekordų knygą 📖",
-    "Tu būtum MVP kiekvienam baliuj 😎",
     "Baras tau turėtų mokėt algą 👑",
-    "Jeigu čia buvo testas – tu jį išlaikei su pagyrimu 😭",
-    "Tu esi alkoholio magnetas 🍺🧲",
-    "Tavo skillas kelia baimę net barmenui 😳"
+    "Tavo skillas kelia baimę net barmenui 😳",
+    "Tu būtum MVP kiekvienam baliuj 😎",
+    "Čia jau ne žmogus, čia legenda."
 ];
 
 const endTextsMid = [
     "Normaliai, bet dar trūksta iki legendos 😎",
-    "Tu kaip pusiau bachūras, pusiau studentas 😭",
-    "Dar vienas balius ir būtum topas 🍻",
     "Ne gaidys, bet ir ne karalius 👀",
     "Rezultatas kaip po dviejų alaus: neblogai, bet miglota.",
-    "Padoriai, bet dar ne alfa vilkas 🐺"
+    "Tu kaip bachūras, bet su stabdžiais."
 ];
 
 const endTextsBad = [
     "Tu oficialiai esi višta... 🐔",
-    "Čia jau tragedija, brolau 😭",
-    "Tu pagavai mažiau nei mano močiutė pagautų 🍺",
     "Gėda prieš visą rajoną 💀",
     "Net šuo pagautų daugiau.",
-    "Tu gimei būti GAIDYS 🐓"
+    "Tu gimei būti GAIDYS 🐓",
+    "Šiandien tavo statusas: DUCHAS."
 ];
 
 function randomFrom(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// AUDIO
+// ====== AUDIO (REAL SOUND) ======
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-function playSound(type) {
+function beep(freq, duration, type="sine", vol=0.15) {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
+
+    osc.type = type;
+    osc.frequency.value = freq;
+
+    gain.gain.value = vol;
+
     osc.connect(gain);
     gain.connect(audioCtx.destination);
 
-    if (type === "good") {
-        osc.frequency.value = 700;
-        gain.gain.value = 0.08;
-        osc.type = "triangle";
-    }
-
-    if (type === "bad") {
-        osc.frequency.value = 200;
-        gain.gain.value = 0.12;
-        osc.type = "sawtooth";
-    }
-
-    if (type === "big") {
-        osc.frequency.value = 950;
-        gain.gain.value = 0.15;
-        osc.type = "square";
-    }
-
-    if (type === "gaidys") {
-        osc.frequency.value = 120;
-        gain.gain.value = 0.2;
-        osc.type = "square";
-    }
-
     osc.start();
-    osc.stop(audioCtx.currentTime + 0.12);
+    osc.stop(audioCtx.currentTime + duration);
+}
+
+function playSound(kind) {
+    if (kind === "good") {
+        beep(700, 0.08, "triangle", 0.18);
+        setTimeout(() => beep(900, 0.07, "triangle", 0.15), 80);
+    }
+
+    if (kind === "big") {
+        beep(500, 0.1, "square", 0.22);
+        setTimeout(() => beep(1000, 0.1, "square", 0.22), 90);
+        setTimeout(() => beep(1400, 0.06, "triangle", 0.16), 180);
+    }
+
+    if (kind === "bad") {
+        beep(160, 0.12, "sawtooth", 0.25);
+        setTimeout(() => beep(120, 0.12, "sawtooth", 0.25), 100);
+    }
+
+    if (kind === "gaidys") {
+        beep(130, 0.2, "square", 0.30);
+        setTimeout(() => beep(260, 0.15, "square", 0.30), 180);
+        setTimeout(() => beep(180, 0.2, "square", 0.30), 340);
+    }
+
+    if (kind === "event") {
+        beep(400, 0.12, "triangle", 0.18);
+        setTimeout(() => beep(600, 0.12, "triangle", 0.18), 140);
+    }
 }
 
 function showBigText(text) {
     bigText.textContent = text;
     bigText.style.opacity = "1";
-    setTimeout(() => bigText.style.opacity = "0", 500);
+    setTimeout(() => bigText.style.opacity = "0", 650);
 }
 
-// FIREBASE FUNCTIONS
+function showEvent(text) {
+    eventBox.textContent = text;
+    eventBox.style.opacity = "1";
+    setTimeout(() => eventBox.style.opacity = "0", 2500);
+}
+
+// ===== FIREBASE =====
 async function addHistory(text) {
     await addDoc(collection(db, "history"), {
         text: text,
@@ -421,7 +453,7 @@ async function saveScore(name, scoreValue) {
 }
 
 // LIVE LISTENERS
-const historyQuery = query(collection(db, "history"), orderBy("createdAt", "desc"), limit(15));
+const historyQuery = query(collection(db, "history"), orderBy("createdAt", "desc"), limit(18));
 onSnapshot(historyQuery, (snapshot) => {
     historyEl.innerHTML = "";
     snapshot.forEach(doc => {
@@ -447,18 +479,31 @@ onSnapshot(scoreQuery, (snapshot) => {
     });
 });
 
-// ITEMS
+// ===== ITEMS =====
 const items = [
-    { emoji: "🍺", points: 1, name: "Alų", chance: 35, sound: "good" },
-    { emoji: "🍕", points: 2, name: "Picą", chance: 16, sound: "good" },
-    { emoji: "🍟", points: 2, name: "Bulvytes", chance: 16, sound: "good" },
-    { emoji: "🏀", points: 3, name: "Kašio kamuolį", chance: 12, sound: "good" },
-    { emoji: "🥃", points: 5, name: "Stiprų gėrimą", chance: 10, sound: "big" },
+    { emoji: "🍺", points: 1, name: "Alų", chance: 22, sound: "good" },
+    { emoji: "🍕", points: 2, name: "Picą", chance: 12, sound: "good" },
+    { emoji: "🍟", points: 2, name: "Bulvytes", chance: 12, sound: "good" },
+    { emoji: "🏀", points: 3, name: "Kašio kamuolį", chance: 10, sound: "good" },
+    { emoji: "🥃", points: 5, name: "Stiprų gėrimą", chance: 8, sound: "big" },
+
+    { emoji: "🟢⚪", points: 7, name: "ŽALGIRĮ", chance: 6, sound: "big" },
+
     { emoji: "💩", points: -3, name: "Šūdą", chance: 7, sound: "bad" },
-    { emoji: "🐓", points: -10, name: "Gaidį", chance: 4, sound: "gaidys" }
+    { emoji: "🐓", points: -10, name: "GAIDĮ", chance: 5, sound: "gaidys" },
+
+    { emoji: "🤡 DUCHAS", points: -4, name: "DUCHĄ", chance: 6, sound: "bad" },
+    { emoji: "🤡 LOPAS", points: -6, name: "LOPĄ", chance: 5, sound: "bad" },
+    { emoji: "🫠 NEVYKĖLIS", points: -5, name: "NEVYKĖLĮ", chance: 5, sound: "bad" }
 ];
 
 function getRandomItem() {
+    if (maximosAkcija) {
+        // akcijos metu tik maistas
+        const food = items.filter(i => ["🍕","🍟"].includes(i.emoji));
+        return food[Math.floor(Math.random() * food.length)];
+    }
+
     let totalChance = items.reduce((sum, i) => sum + i.chance, 0);
     let rand = Math.random() * totalChance;
 
@@ -469,7 +514,7 @@ function getRandomItem() {
     return items[0];
 }
 
-// START GAME
+// ===== START =====
 startBtn.addEventListener("click", async () => {
     playerName = nameInput.value.trim();
     if (playerName === "") playerName = "Anonimas";
@@ -480,24 +525,73 @@ startBtn.addEventListener("click", async () => {
 
     await audioCtx.resume();
 
-    addHistory(`👤 <b>${playerName}</b> prisijungė prie gėrimo misijos 🍻`);
+    playSound("event");
     showBigText("PRADĖTA 🍺");
+    addHistory(`👤 <b>${playerName}</b> prisijungė prie gėrimo misijos 🍻`);
 
     startGame();
 });
 
-// PLAYER MOVE
+// ===== PLAYER MOVE =====
 document.addEventListener("mousemove", (e) => {
+    if (freezeMovement) return;
     playerX = e.clientX;
     player.style.left = playerX + "px";
 });
 
 document.addEventListener("touchmove", (e) => {
+    if (freezeMovement) return;
     playerX = e.touches[0].clientX;
     player.style.left = playerX + "px";
 });
 
-// SPAWN ITEMS
+// ===== EVENTS =====
+function triggerRandomEvent() {
+    if (!gameRunning) return;
+
+    const chance = Math.random();
+
+    // policija
+    if (chance < 0.33) {
+        freezeMovement = true;
+        showEvent("🚔 POLICIJA! 3s nejudėk!");
+        playSound("event");
+        addHistory(`🚔 Policija atėjo. <b>${playerName}</b> sustingo...`);
+
+        setTimeout(() => {
+            freezeMovement = false;
+            showEvent("🚔 Policija išėjo 😎");
+        }, 3000);
+    }
+
+    // maximos akcija
+    else if (chance < 0.66) {
+        maximosAkcija = true;
+        showEvent("🛒 MAXIMOS AKCIJA! 5s tik maistas!");
+        playSound("event");
+        addHistory(`🛒 MAXIMOS AKCIJA! <b>${playerName}</b> dabar medžioja picas 🍕`);
+
+        setTimeout(() => {
+            maximosAkcija = false;
+            showEvent("🛒 Akcija baigėsi...");
+        }, 5000);
+    }
+
+    // zalgiris run
+    else {
+        zalgirisRun = true;
+        showEvent("🟢⚪ ŽALGIRIS RUN! 5s ŽALGIRIS +2x");
+        playSound("event");
+        addHistory(`🟢⚪ ŽALGIRIS RUN! <b>${playerName}</b> įjungė Kauno modą 😭`);
+
+        setTimeout(() => {
+            zalgirisRun = false;
+            showEvent("🟢⚪ Žalgiris run baigėsi...");
+        }, 5000);
+    }
+}
+
+// ===== SPAWN ITEMS =====
 function spawnItem() {
     if (!gameRunning) return;
 
@@ -506,14 +600,14 @@ function spawnItem() {
     item.classList.add("item");
     item.textContent = itemData.emoji;
 
-    item.style.left = Math.random() * (window.innerWidth - 50) + "px";
+    item.style.left = Math.random() * (window.innerWidth - 80) + "px";
     item.style.top = "-60px";
 
     gameArea.appendChild(item);
 
-    let fallSpeed = 4 + Math.random() * 6;
+    let fallSpeed = 4 + Math.random() * 7;
 
-    const fallInterval = setInterval(async () => {
+    const fallInterval = setInterval(() => {
         if (!gameRunning) {
             clearInterval(fallInterval);
             item.remove();
@@ -532,16 +626,23 @@ function spawnItem() {
             itemRect.left < playerRect.right &&
             itemRect.right > playerRect.left
         ) {
-            score += itemData.points;
+            let gained = itemData.points;
+
+            if (zalgirisRun && itemData.emoji === "🟢⚪") {
+                gained = gained * 2;
+            }
+
+            score += gained;
             scoreEl.textContent = score;
+
             playSound(itemData.sound);
 
-            if (itemData.points > 0) {
+            if (gained > 0) {
                 showBigText(randomFrom(catchPhrasesGood));
-                addHistory(`${itemData.emoji} <b>${playerName}</b> pagavo ${itemData.name} (+${itemData.points})`);
+                addHistory(`${itemData.emoji} <b>${playerName}</b> pagavo ${itemData.name} (+${gained})`);
             } else {
                 showBigText(randomFrom(catchPhrasesBad));
-                addHistory(`${itemData.emoji} <b>${playerName}</b> pagavo ${itemData.name} (${itemData.points})`);
+                addHistory(`${itemData.emoji} <b>${playerName}</b> pagavo ${itemData.name} (${gained})`);
             }
 
             item.remove();
@@ -556,6 +657,7 @@ function spawnItem() {
     }, 20);
 }
 
+// ===== GAME LOOP =====
 function startGame() {
     const spawnInterval = setInterval(() => {
         if (!gameRunning) {
@@ -563,9 +665,21 @@ function startGame() {
             return;
         }
         spawnItem();
-    }, 520);
+    }, 500);
 
-    const timerInterval = setInterval(async () => {
+    const eventInterval = setInterval(() => {
+        if (!gameRunning) {
+            clearInterval(eventInterval);
+            return;
+        }
+
+        // kas 7s šansas eventui
+        if (Math.random() < 0.4) {
+            triggerRandomEvent();
+        }
+    }, 7000);
+
+    const timerInterval = setInterval(() => {
         if (!gameRunning) return;
 
         timeLeft--;
@@ -579,6 +693,7 @@ function startGame() {
     }, 1000);
 }
 
+// ===== END GAME =====
 async function endGame() {
     overlay.style.display = "flex";
 
@@ -588,12 +703,13 @@ async function endGame() {
         resultTitle.innerHTML = "🐓 GAIDYS DETECTED 🐓";
         resultText.innerHTML = `
             <b>${playerName}</b>, tu surinkai tik <b>${score}</b> taškų.<br><br>
-            ${randomFrom(endTextsBad)}
+            ${randomFrom(endTextsBad)}<br><br>
+            Statusas: <b>GAIDYS / DUCHAS / NEVYKĖLIS</b> 💀
         `;
         addHistory(`🐓 <b>${playerName}</b> baigė su <b>${score}</b> taškų. GAIDYS MODE 😭`);
     } 
     else if (score < 30) {
-        resultTitle.innerHTML = "🍺 Bachūras, bet atsargiai 🍺";
+        resultTitle.innerHTML = "🍺 PADORUS BACHŪRAS 🍺";
         resultText.innerHTML = `
             <b>${playerName}</b>, surinkai <b>${score}</b> taškų.<br><br>
             ${randomFrom(endTextsMid)}
@@ -604,15 +720,13 @@ async function endGame() {
         resultTitle.innerHTML = "👑 ALKO IMPERATORIUS 👑";
         resultText.innerHTML = `
             <b>${playerName}</b>, surinkai <b>${score}</b> taškų.<br><br>
-            ${randomFrom(endTextsGood)}
+            ${randomFrom(endTextsGood)}<br><br>
+            Tu oficialiai esi Lietuvos barų karalius 🇱🇹🍻
         `;
         addHistory(`👑 <b>${playerName}</b> baigė su <b>${score}</b> taškų. IMPERATORIUS 🍻🔥`);
     }
 }
-
 </script>
 
 </body>
 </html>
-
-<!-- publish -->
