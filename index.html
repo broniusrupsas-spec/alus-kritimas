@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alaus Kritimo Challenge 🍺</title>
+
+<style>
+    body {
+        margin: 0;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+        background: linear-gradient(135deg, #1e1e1e, #3a2f2f);
+        color: white;
+        text-align: center;
+    }
+
+    #hud {
+        position: fixed;
+        top: 15px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 20px;
+        background: rgba(0,0,0,0.5);
+        padding: 12px 20px;
+        border-radius: 15px;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        z-index: 999;
+    }
+
+    #gameArea {
+        width: 100vw;
+        height: 100vh;
+        position: relative;
+    }
+
+    #player {
+        position: absolute;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 70px;
+        transition: 0.05s;
+        user-select: none;
+    }
+
+    .beer {
+        position: absolute;
+        top: -60px;
+        font-size: 55px;
+        user-select: none;
+    }
+
+    #overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.85);
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        z-index: 1000;
+        padding: 20px;
+    }
+
+    #overlay h1 {
+        font-size: 50px;
+        margin-bottom: 10px;
+    }
+
+    #overlay p {
+        font-size: 22px;
+        max-width: 600px;
+    }
+
+    button {
+        margin-top: 25px;
+        padding: 14px 30px;
+        font-size: 20px;
+        border: none;
+        border-radius: 15px;
+        cursor: pointer;
+        background: #ffcc00;
+        color: black;
+        font-weight: bold;
+        transition: 0.2s;
+    }
+
+    button:hover {
+        transform: scale(1.05);
+        background: #ffd633;
+    }
+</style>
+</head>
+
+<body>
+
+<div id="hud">
+    🍺 Surinkta: <span id="score">0</span> | ⏳ Laikas: <span id="time">20</span>s
+</div>
+
+<div id="gameArea">
+    <div id="player">🧺</div>
+</div>
+
+<div id="overlay">
+    <h1 id="resultTitle"></h1>
+    <p id="resultText"></p>
+    <button onclick="location.reload()">Bandyt dar kartą 😈</button>
+</div>
+
+<script>
+const gameArea = document.getElementById("gameArea");
+const player = document.getElementById("player");
+const scoreEl = document.getElementById("score");
+const timeEl = document.getElementById("time");
+
+const overlay = document.getElementById("overlay");
+const resultTitle = document.getElementById("resultTitle");
+const resultText = document.getElementById("resultText");
+
+let score = 0;
+let timeLeft = 20;
+let gameRunning = true;
+
+let playerX = window.innerWidth / 2;
+const playerWidth = 80;
+
+// Move player with mouse
+document.addEventListener("mousemove", (e) => {
+    playerX = e.clientX;
+    player.style.left = playerX + "px";
+});
+
+// Mobile touch support
+document.addEventListener("touchmove", (e) => {
+    playerX = e.touches[0].clientX;
+    player.style.left = playerX + "px";
+});
+
+// Spawn beers
+function spawnBeer() {
+    if (!gameRunning) return;
+
+    const beer = document.createElement("div");
+    beer.classList.add("beer");
+    beer.textContent = "🍺";
+
+    beer.style.left = Math.random() * (window.innerWidth - 50) + "px";
+    beer.style.top = "-60px";
+
+    gameArea.appendChild(beer);
+
+    let fallSpeed = 4 + Math.random() * 4;
+
+    const fallInterval = setInterval(() => {
+        if (!gameRunning) {
+            clearInterval(fallInterval);
+            beer.remove();
+            return;
+        }
+
+        let beerY = parseFloat(beer.style.top);
+        beerY += fallSpeed;
+        beer.style.top = beerY + "px";
+
+        // Collision detection
+        const beerRect = beer.getBoundingClientRect();
+        const playerRect = player.getBoundingClientRect();
+
+        if (
+            beerRect.bottom >= playerRect.top &&
+            beerRect.left < playerRect.right &&
+            beerRect.right > playerRect.left
+        ) {
+            score++;
+            scoreEl.textContent = score;
+            beer.remove();
+            clearInterval(fallInterval);
+        }
+
+        // Remove if missed
+        if (beerY > window.innerHeight) {
+            beer.remove();
+            clearInterval(fallInterval);
+        }
+
+    }, 20);
+}
+
+// Timer countdown
+const timerInterval = setInterval(() => {
+    if (!gameRunning) return;
+
+    timeLeft--;
+    timeEl.textContent = timeLeft;
+
+    if (timeLeft <= 0) {
+        gameRunning = false;
+        clearInterval(timerInterval);
+        endGame();
+    }
+}, 1000);
+
+// Spawn loop
+const spawnInterval = setInterval(() => {
+    if (!gameRunning) {
+        clearInterval(spawnInterval);
+        return;
+    }
+    spawnBeer();
+}, 600);
+
+// End game logic
+function endGame() {
+    overlay.style.display = "flex";
+
+    if (score < 10) {
+        resultTitle.innerHTML = "🐓 GAIDYS DETECTED 🐓";
+        resultText.innerHTML = `
+            Tu surinkai tik <b>${score}</b> alaus.<br><br>
+            Rimtai? 😂<br>
+            Eik pasportuot refleksus, gaideli 😈
+        `;
+    } else if (score < 20) {
+        resultTitle.innerHTML = "🍺 Normalus vyras 🍺";
+        resultText.innerHTML = `
+            Tu surinkai <b>${score}</b> alaus.<br><br>
+            Dar trūksta iki legendos, bet jau ne gaidys 😎
+        `;
+    } else {
+        resultTitle.innerHTML = "👑 ALUS KARALIUS 👑";
+        resultText.innerHTML = `
+            Tu surinkai <b>${score}</b> alaus.<br><br>
+            Sveikinu, tu oficialiai gali gert be sąžinės graužaties 🍻🔥
+        `;
+    }
+}
+</script>
+
+</body>
+</html>
+
+<!-- publish -->
