@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bachūrų Kritimo Simulatorius 🍺💩</title>
+<title>Bachūrų Kritimo Multiplayer 🍺</title>
 
 <style>
     body {
@@ -34,8 +34,8 @@
         position: fixed;
         top: 15px;
         left: 15px;
-        width: 280px;
-        height: 260px;
+        width: 320px;
+        height: 280px;
         overflow-y: auto;
         background: rgba(0,0,0,0.55);
         padding: 12px;
@@ -45,24 +45,43 @@
         z-index: 999;
     }
 
-    #historyBox h3 {
+    #leaderboardBox {
+        position: fixed;
+        top: 315px;
+        left: 15px;
+        width: 320px;
+        height: 280px;
+        overflow-y: auto;
+        background: rgba(0,0,0,0.55);
+        padding: 12px;
+        border-radius: 15px;
+        font-size: 14px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+        z-index: 999;
+    }
+
+    #historyBox h3, #leaderboardBox h3 {
         margin: 0 0 8px 0;
         font-size: 15px;
         text-align: center;
         opacity: 0.9;
     }
 
-    #history {
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-    }
-
     .log {
         background: rgba(255,255,255,0.08);
         padding: 6px 8px;
         border-radius: 10px;
-        animation: fadeIn 0.25s ease;
+        margin-bottom: 6px;
+        animation: fadeIn 0.2s ease;
+    }
+
+    .rank {
+        background: rgba(255,255,255,0.08);
+        padding: 8px 10px;
+        border-radius: 10px;
+        margin-bottom: 6px;
+        display: flex;
+        justify-content: space-between;
     }
 
     @keyframes fadeIn {
@@ -178,18 +197,6 @@
         font-size: 14px;
     }
 
-    .shake {
-        animation: shake 0.25s;
-    }
-
-    @keyframes shake {
-        0% { transform: translate(0,0); }
-        25% { transform: translate(6px, -4px); }
-        50% { transform: translate(-6px, 4px); }
-        75% { transform: translate(4px, 6px); }
-        100% { transform: translate(0,0); }
-    }
-
     #bigText {
         position: fixed;
         top: 45%;
@@ -203,7 +210,6 @@
         z-index: 1500;
         pointer-events: none;
     }
-
 </style>
 </head>
 
@@ -211,8 +217,8 @@
 
 <div id="startScreen">
     <div class="startCard">
-        <h1>🍺 Bachūrų Kritimo Simulatorius</h1>
-        <p>Įvesk vardą ir pradėk gėrimo misiją 😈</p>
+        <h1>🍺 Multiplayer Bachūrų Kritimas</h1>
+        <p>Įvesk vardą, kad visi matytų tavo gėrimo istoriją 😈</p>
         <input id="nameInput" placeholder="Pvz: Mantas">
         <br>
         <button id="startBtn">PRADĖT 🍻</button>
@@ -227,8 +233,13 @@
 </div>
 
 <div id="historyBox">
-    <h3>📜 Istorija</h3>
+    <h3>📜 Live istorija</h3>
     <div id="history"></div>
+</div>
+
+<div id="leaderboardBox">
+    <h3>🏆 Top Bachūrai</h3>
+    <div id="leaderboard"></div>
 </div>
 
 <div id="bigText"></div>
@@ -243,12 +254,34 @@
     <button onclick="location.reload()">Bandyt dar kartą 😈</button>
 </div>
 
-<script>
+<!-- FIREBASE -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+
+// =============================
+// 🔥 ČIA ĮKLIJUOK SAVO CONFIG
+// =============================
+const firebaseConfig = {
+  apiKey: "PAKEISK",
+  authDomain: "PAKEISK",
+  projectId: "PAKEISK",
+  storageBucket: "PAKEISK",
+  messagingSenderId: "PAKEISK",
+  appId: "PAKEISK"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// UI elements
 const gameArea = document.getElementById("gameArea");
 const player = document.getElementById("player");
 const scoreEl = document.getElementById("score");
 const timeEl = document.getElementById("time");
 const historyEl = document.getElementById("history");
+const leaderboardEl = document.getElementById("leaderboard");
 const bigText = document.getElementById("bigText");
 
 const overlay = document.getElementById("overlay");
@@ -260,22 +293,24 @@ const startBtn = document.getElementById("startBtn");
 const nameInput = document.getElementById("nameInput");
 const playerNameEl = document.getElementById("playerName");
 
+// GAME STATE
 let playerName = "Bachūras";
 let score = 0;
 let timeLeft = 25;
 let gameRunning = false;
 let playerX = window.innerWidth / 2;
 
+// Random phrases
 const catchPhrasesGood = [
     "NICEEE 😎",
     "OPA OPA 🍻",
-    "KAS ČIA PER SKILLAS 🔥",
-    "LEGENDINIS PAGAVIMAS 👑",
     "ŽVĖRIS MODE 🐺",
-    "TIKRAS BACHŪRAS 💪",
-    "ČIA NE ŽAIDIMAS, ČIA MENAS 🎨",
-    "TU KAIP MAGNETAS 🍺",
-    "BROLIS GAUDO VISKĄ 😭"
+    "PAGAVAI KAIP DIEVAS 👑",
+    "SKILL ISSUE? NE, SKILL KING 😭",
+    "ČIA NE ŽAIDIMAS, ČIA GYVENIMAS 🔥",
+    "KĄ TU DARAI?? LEGENDINIS 😳",
+    "ALUS EINA PAS TAVE KAIP TAXI 🚖🍺",
+    "NEŽMONIŠKAS REFLEKSAS ⚡"
 ];
 
 const catchPhrasesBad = [
@@ -284,24 +319,28 @@ const catchPhrasesBad = [
     "KAS TAU DAROSI??",
     "NEIMK TO 😭",
     "ČIA JAU PER ŽEMA...",
-    "GĖDA 😐"
+    "GĖDA 😐",
+    "MAMA MATYTŲ - IŠSIŽADĖTŲ 😭"
 ];
 
 const endTextsGood = [
     "Tu esi oficialus alaus dievas 🍻🔥",
     "Tavo kepenys pasiruošusios karui 💀",
-    "Šitas rezultatas kelia pagarbą net baro savininkui 😭",
+    "Tave turėtų įrašyt į Lietuvos rekordų knygą 📖",
     "Tu būtum MVP kiekvienam baliuj 😎",
-    "Jeigu čia buvo testas – tu jį išlaikei su pagyrimu 👑",
-    "Čia jau nebe žmogus, čia alaus magnetas 🍺🧲"
+    "Baras tau turėtų mokėt algą 👑",
+    "Jeigu čia buvo testas – tu jį išlaikei su pagyrimu 😭",
+    "Tu esi alkoholio magnetas 🍺🧲",
+    "Tavo skillas kelia baimę net barmenui 😳"
 ];
 
 const endTextsMid = [
     "Normaliai, bet dar trūksta iki legendos 😎",
     "Tu kaip pusiau bachūras, pusiau studentas 😭",
-    "Dar vienas vakaras ir būtum topas 🍻",
+    "Dar vienas balius ir būtum topas 🍻",
     "Ne gaidys, bet ir ne karalius 👀",
-    "Rezultatas kaip po dviejų alaus: neblogai, bet miglota."
+    "Rezultatas kaip po dviejų alaus: neblogai, bet miglota.",
+    "Padoriai, bet dar ne alfa vilkas 🐺"
 ];
 
 const endTextsBad = [
@@ -309,16 +348,20 @@ const endTextsBad = [
     "Čia jau tragedija, brolau 😭",
     "Tu pagavai mažiau nei mano močiutė pagautų 🍺",
     "Gėda prieš visą rajoną 💀",
-    "Net šuo pagautų daugiau."
+    "Net šuo pagautų daugiau.",
+    "Tu gimei būti GAIDYS 🐓"
 ];
 
-// audio beeps (no mp3 needed)
+function randomFrom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// AUDIO
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 function playSound(type) {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-
     osc.connect(gain);
     gain.connect(audioCtx.destination);
 
@@ -356,17 +399,55 @@ function showBigText(text) {
     setTimeout(() => bigText.style.opacity = "0", 500);
 }
 
-function logEvent(text) {
-    const div = document.createElement("div");
-    div.classList.add("log");
-    div.innerHTML = text;
-    historyEl.prepend(div);
+// FIREBASE FUNCTIONS
+async function addHistory(text) {
+    await addDoc(collection(db, "history"), {
+        text: text,
+        createdAt: serverTimestamp()
+    });
+}
 
-    if (historyEl.children.length > 10) {
-        historyEl.removeChild(historyEl.lastChild);
+async function saveScore(name, scoreValue) {
+    const ref = doc(db, "scores", name);
+    const existing = await getDoc(ref);
+
+    if (!existing.exists() || existing.data().score < scoreValue) {
+        await setDoc(ref, {
+            name: name,
+            score: scoreValue,
+            updatedAt: serverTimestamp()
+        });
     }
 }
 
+// LIVE LISTENERS
+const historyQuery = query(collection(db, "history"), orderBy("createdAt", "desc"), limit(15));
+onSnapshot(historyQuery, (snapshot) => {
+    historyEl.innerHTML = "";
+    snapshot.forEach(doc => {
+        const data = doc.data();
+        const div = document.createElement("div");
+        div.classList.add("log");
+        div.innerHTML = data.text;
+        historyEl.appendChild(div);
+    });
+});
+
+const scoreQuery = query(collection(db, "scores"), orderBy("score", "desc"), limit(10));
+onSnapshot(scoreQuery, (snapshot) => {
+    leaderboardEl.innerHTML = "";
+    let rank = 1;
+    snapshot.forEach(doc => {
+        const data = doc.data();
+        const div = document.createElement("div");
+        div.classList.add("rank");
+        div.innerHTML = `<span>#${rank} <b>${data.name}</b></span> <span>🍀 ${data.score}</span>`;
+        leaderboardEl.appendChild(div);
+        rank++;
+    });
+});
+
+// ITEMS
 const items = [
     { emoji: "🍺", points: 1, name: "Alų", chance: 35, sound: "good" },
     { emoji: "🍕", points: 2, name: "Picą", chance: 16, sound: "good" },
@@ -388,6 +469,7 @@ function getRandomItem() {
     return items[0];
 }
 
+// START GAME
 startBtn.addEventListener("click", async () => {
     playerName = nameInput.value.trim();
     if (playerName === "") playerName = "Anonimas";
@@ -396,15 +478,15 @@ startBtn.addEventListener("click", async () => {
     startScreen.style.display = "none";
     gameRunning = true;
 
-    // needed so browser allows audio
     await audioCtx.resume();
 
-    logEvent(`👤 <b>${playerName}</b> prisijungė prie gėrimo misijos.`);
-    showBigText("PRADĖTA 🍻");
+    addHistory(`👤 <b>${playerName}</b> prisijungė prie gėrimo misijos 🍻`);
+    showBigText("PRADĖTA 🍺");
 
     startGame();
 });
 
+// PLAYER MOVE
 document.addEventListener("mousemove", (e) => {
     playerX = e.clientX;
     player.style.left = playerX + "px";
@@ -415,6 +497,7 @@ document.addEventListener("touchmove", (e) => {
     player.style.left = playerX + "px";
 });
 
+// SPAWN ITEMS
 function spawnItem() {
     if (!gameRunning) return;
 
@@ -430,7 +513,7 @@ function spawnItem() {
 
     let fallSpeed = 4 + Math.random() * 6;
 
-    const fallInterval = setInterval(() => {
+    const fallInterval = setInterval(async () => {
         if (!gameRunning) {
             clearInterval(fallInterval);
             item.remove();
@@ -451,26 +534,14 @@ function spawnItem() {
         ) {
             score += itemData.points;
             scoreEl.textContent = score;
-
             playSound(itemData.sound);
 
             if (itemData.points > 0) {
-                const phrase = catchPhrasesGood[Math.floor(Math.random() * catchPhrasesGood.length)];
-                showBigText(phrase);
-                logEvent(`${itemData.emoji} <b>${playerName}</b> pagavo ${itemData.name} (+${itemData.points})`);
+                showBigText(randomFrom(catchPhrasesGood));
+                addHistory(`${itemData.emoji} <b>${playerName}</b> pagavo ${itemData.name} (+${itemData.points})`);
             } else {
-                const phrase = catchPhrasesBad[Math.floor(Math.random() * catchPhrasesBad.length)];
-                showBigText(phrase);
-                logEvent(`${itemData.emoji} <b>${playerName}</b> pagavo ${itemData.name} (${itemData.points})`);
-            }
-
-            if (itemData.emoji === "💩") {
-                document.body.classList.add("shake");
-                setTimeout(() => document.body.classList.remove("shake"), 250);
-            }
-
-            if (itemData.emoji === "🐓") {
-                showBigText("GAIDYS MODE 🐓");
+                showBigText(randomFrom(catchPhrasesBad));
+                addHistory(`${itemData.emoji} <b>${playerName}</b> pagavo ${itemData.name} (${itemData.points})`);
             }
 
             item.remove();
@@ -494,7 +565,7 @@ function startGame() {
         spawnItem();
     }, 520);
 
-    const timerInterval = setInterval(() => {
+    const timerInterval = setInterval(async () => {
         if (!gameRunning) return;
 
         timeLeft--;
@@ -508,38 +579,37 @@ function startGame() {
     }, 1000);
 }
 
-function randomFrom(arr) {
-    return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function endGame() {
+async function endGame() {
     overlay.style.display = "flex";
+
+    await saveScore(playerName, score);
 
     if (score < 15) {
         resultTitle.innerHTML = "🐓 GAIDYS DETECTED 🐓";
         resultText.innerHTML = `
             <b>${playerName}</b>, tu surinkai tik <b>${score}</b> taškų.<br><br>
-            ${randomFrom(endTextsBad)}<br><br>
-            Šiandien tu oficialiai esi rajono GAIDYS 😭
+            ${randomFrom(endTextsBad)}
         `;
-    } else if (score < 30) {
+        addHistory(`🐓 <b>${playerName}</b> baigė su <b>${score}</b> taškų. GAIDYS MODE 😭`);
+    } 
+    else if (score < 30) {
         resultTitle.innerHTML = "🍺 Bachūras, bet atsargiai 🍺";
         resultText.innerHTML = `
             <b>${playerName}</b>, surinkai <b>${score}</b> taškų.<br><br>
-            ${randomFrom(endTextsMid)}<br><br>
-            Dar vienas balius ir būsi topas 😎
+            ${randomFrom(endTextsMid)}
         `;
-    } else {
+        addHistory(`🍺 <b>${playerName}</b> baigė su <b>${score}</b> taškų. Padoriai 😎`);
+    } 
+    else {
         resultTitle.innerHTML = "👑 ALKO IMPERATORIUS 👑";
         resultText.innerHTML = `
             <b>${playerName}</b>, surinkai <b>${score}</b> taškų.<br><br>
-            ${randomFrom(endTextsGood)}<br><br>
-            Visa Lietuva tavim didžiuojasi 🇱🇹🍻
+            ${randomFrom(endTextsGood)}
         `;
+        addHistory(`👑 <b>${playerName}</b> baigė su <b>${score}</b> taškų. IMPERATORIUS 🍻🔥`);
     }
-
-    logEvent(`🏁 Žaidimas baigėsi. <b>${playerName}</b> surinko <b>${score}</b> taškų.`);
 }
+
 </script>
 
 </body>
